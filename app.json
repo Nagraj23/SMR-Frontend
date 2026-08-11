@@ -2,6 +2,12 @@
   "expo": {
     "name": "SMR",
     "slug": "SMR",
-    "version": "1.0.0"
+    "version": "1.0.0",
+    "scheme": "smr",
+    "extra": {
+      "eas": {
+        "projectId": "5f9b4bd7-5987-423a-9019-aa3eb88dc24a"
+      }
+    }
   }
 }
