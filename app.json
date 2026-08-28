@@ -3,7 +3,51 @@
     "name": "SMR",
     "slug": "SMR",
     "version": "1.0.0",
-    "scheme": "smr",
+    "orientation": "portrait",
+    "icon": "./assets/call.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/call.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0F172A"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.smr.app",
+      "config": {
+        "googleMapsApiKey": "AIzaSyBD4COpbpOTlra_pl27lUwWz4WRHEAduvs"
+      },
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "SMR needs your location to discover nearby rides and show live routes.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "SMR tracks your location to provide accurate route navigation and arrival updates."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/call.png",
+        "backgroundColor": "#0F172A"
+      },
+      "package": "com.smr.app",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBD4COpbpOTlra_pl27lUwWz4WRHEAduvs"
+        }
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow SMR to access your location to discover nearby rides and map routes."
+        }
+      ]
+    ],
     "extra": {
       "eas": {
         "projectId": "5f9b4bd7-5987-423a-9019-aa3eb88dc24a"
