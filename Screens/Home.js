@@ -1,379 +1,369 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import {
     View,
     Text,
-    StyleSheet,
-    Dimensions,
     TextInput,
-    TouchableOpacity,
+    Image,
+    StyleSheet,
     ActivityIndicator,
     Platform,
+    Dimensions,
     StatusBar,
+    TouchableOpacity,
+    FlatList,
+    KeyboardAvoidingView,
+    Keyboard,
+    TouchableWithoutFeedback,
 } from "react-native";
-import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
+import { Ionicons, Feather } from "@expo/vector-icons";
+import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
 import * as Location from "expo-location";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import axios from "axios";
 import { useAuth } from "../Context/AuthContext";
-import { AUTH_URL } from "../constants/api";
 
-const { width, height } = Dimensions.get("window");
+const { height: screenHeight } = Dimensions.get("window");
 
-const DEFAULT_REGION = {
-    latitude: 17.6599,
-    longitude: 75.9064,
-    latitudeDelta: 0.015,
-    longitudeDelta: 0.015,
+const appColors = {
+    primary: "#F59E0B",
+    background: "#F8FAFC",
+    cardBg: "#FFFFFF",
+    darkText: "#0F172A",
+    subText: "#64748B",
+    border: "#E2E8F0",
+    inputBg: "#F1F5F9",
 };
 
-const MOCK_BIKES = [
-    { id: "b1", latitude: 17.6625, longitude: 75.9040, heading: 45 },
-    { id: "b2", latitude: 17.6580, longitude: 75.9100, heading: 120 },
-    { id: "b3", latitude: 17.6550, longitude: 75.9020, heading: 210 },
-    { id: "b4", latitude: 17.6630, longitude: 75.9120, heading: 300 },
+// Common/Popular Destination Suggestions
+const POPULAR_PLACES = [
+    { id: "1", title: "Saat Rasta", subtitle: "Solapur Central", lat: 17.668, lon: 75.908 },
+    { id: "2", title: "Kanna Chowk", subtitle: "Market Area", lat: 17.672, lon: 75.914 },
+    { id: "3", title: "Old Pune Naka", subtitle: "Highway Junction", lat: 17.684, lon: 75.892 },
+    { id: "4", title: "Railway Station", subtitle: "Solapur Jn", lat: 17.659, lon: 75.906 },
 ];
 
-export default function HomeScreen({ navigation }) {
-    const { userToken, userData } = useAuth();
-    const mapRef = useRef(null);
-
-    const [userName, setUserName] = useState(userData?.name || "Rider");
-    const [currentRegion, setCurrentRegion] = useState(DEFAULT_REGION);
-    const [loadingLoc, setLoadingLoc] = useState(true);
-    const [searchLocation, setSearchLocation] = useState("");
+export default function Home({ navigation }) {
+    const { user } = useAuth();
+    const [location, setLocation] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [destination, setDestination] = useState("");
+    const [suggestions, setSuggestions] = useState([]);
 
     useEffect(() => {
-        fetchUserDetails();
-        getUserLocation();
+        const getLocation = async () => {
+            try {
+                const { status } = await Location.requestForegroundPermissionsAsync();
+                if (status !== "granted") {
+                    setLoading(false);
+                    return;
+                }
+
+                const currentLocation = await Location.getCurrentPositionAsync({
+                    accuracy: Location.Accuracy.High,
+                });
+
+                setLocation({
+                    latitude: currentLocation.coords.latitude,
+                    longitude: currentLocation.coords.longitude,
+                    latitudeDelta: 0.009,
+                    longitudeDelta: 0.009,
+                });
+            } catch (error) {
+                console.error("Error fetching location:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        getLocation();
     }, []);
 
-    const fetchUserDetails = async () => {
-        if (!userData?.id || !userToken) return;
-        try {
-            const res = await axios.get(`${AUTH_URL}/api/auth/users/${userData.id}`, {
-                headers: { Authorization: `Bearer ${userToken}` },
-            });
-            if (res.data?.name) {
-                setUserName(res.data.name);
-            }
-        } catch (err) {
-            console.log("Cached user profile in use:", err.message);
+    const handleDestinationChange = (text) => {
+        setDestination(text);
+        if (text.trim().length > 0) {
+            const filtered = POPULAR_PLACES.filter((place) =>
+                place.title.toLowerCase().includes(text.toLowerCase())
+            );
+            setSuggestions(filtered);
+        } else {
+            setSuggestions([]);
         }
     };
 
-    const getUserLocation = async () => {
-        try {
-            const { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== "granted") {
-                setLoadingLoc(false);
-                return;
-            }
-
-            const loc = await Location.getCurrentPositionAsync({
-                accuracy: Location.Accuracy.Balanced,
-            });
-
-            const userCoords = {
-                latitude: loc.coords.latitude,
-                longitude: loc.coords.longitude,
-                latitudeDelta: 0.012,
-                longitudeDelta: 0.012,
-            };
-
-            setCurrentRegion(userCoords);
-            if (mapRef.current) {
-                mapRef.current.animateToRegion(userCoords, 600);
-            }
-        } catch (error) {
-            console.warn("GPS lookup fallback to default:", error.message);
-        } finally {
-            setLoadingLoc(false);
-        }
-    };
-
-    const handleRecenter = () => {
-        if (mapRef.current && currentRegion) {
-            mapRef.current.animateToRegion(currentRegion, 600);
-        }
-    };
-
-    const handleQuickPlaceSelect = (placeName) => {
-        setSearchLocation(placeName);
-        navigation.navigate("Route", { destination: placeName });
+    const handleSelectPlace = (place) => {
+        Keyboard.dismiss();
+        navigation.navigate("RouteScreen", {
+            pickupLocation: "Current Location",
+            pickupCoords: {
+                latitude: location?.latitude || 17.6599,
+                longitude: location?.longitude || 75.9064,
+            },
+            destinationName: place.title,
+            destinationCoords: {
+                latitude: place.lat,
+                longitude: place.lon,
+            },
+        });
     };
 
     return (
-        <View style={styles.container}>
-            <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+        <KeyboardAvoidingView
+            style={styles.container}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+        >
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+                <View style={styles.innerContainer}>
+                    <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
-            {/* FULL-CANVAS MAP LAYER */}
-            <View style={styles.mapContainer}>
-                {loadingLoc ? (
-                    <View style={styles.mapLoader}>
-                        <ActivityIndicator size="large" color="#0F172A" />
-                        <Text style={styles.loaderText}>Locating nearest rides...</Text>
-                    </View>
-                ) : (
-                    <MapView
-                        ref={mapRef}
-                        provider={PROVIDER_DEFAULT}
-                        style={StyleSheet.absoluteFillObject}
-                        region={currentRegion}
-                        showsUserLocation={true}
-                        showsMyLocationButton={false}
-                        showsCompass={false}
-                        showsTraffic={false}
-                    >
-                        {MOCK_BIKES.map((bike) => (
-                            <Marker
-                                key={bike.id}
-                                coordinate={{
-                                    latitude: bike.latitude,
-                                    longitude: bike.longitude,
-                                }}
-                                anchor={{ x: 0.5, y: 0.5 }}
-                                flat={true}
+                    {/* DYNAMIC MAP SECTION (Auto-adjusts height when keyboard appears) */}
+                    <View style={styles.mapSection}>
+                        {loading ? (
+                            <View style={styles.centerBox}>
+                                <ActivityIndicator size="large" color={appColors.primary} />
+                            </View>
+                        ) : location ? (
+                            <MapView
+                                provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
+                                style={styles.absoluteMap}
+                                initialRegion={location}
+                                region={location}
+                                showsUserLocation={true}
+                                showsMyLocationButton={false}
                             >
-                                <View style={[styles.bikeMarker, { transform: [{ rotate: `${bike.heading}deg` }] }]}>
-                                    <MaterialCommunityIcons name="motorbike" size={20} color="#0284C7" />
-                                </View>
-                            </Marker>
-                        ))}
-                    </MapView>
-                )}
+                                <Marker
+                                    coordinate={{
+                                        latitude: location.latitude,
+                                        longitude: location.longitude,
+                                    }}
+                                    title="You are here"
+                                />
+                            </MapView>
+                        ) : (
+                            <View style={styles.centerBox}>
+                                <Feather name="alert-triangle" size={28} color={appColors.subText} />
+                                <Text style={styles.errorText}>GPS permissions required</Text>
+                            </View>
+                        )}
 
-                {/* FLOATING TOP-LEFT HEADER */}
-                <View style={styles.topBar}>
-                    <TouchableOpacity
-                        style={styles.menuButton}
-                        activeOpacity={0.8}
-                        onPress={() => navigation.navigate("Profile")}
-                    >
-                        <Ionicons name="menu" size={24} color="#0F172A" />
-                    </TouchableOpacity>
-                    <View style={styles.userBadge}>
-                        <Text style={styles.userGreeting}>Hey, {userName.split(" ")[0]}</Text>
+                        {/* FLOATING TOP BAR */}
+                        <View style={styles.topBar}>
+                            <TouchableOpacity
+                                style={styles.menuButton}
+                                activeOpacity={0.8}
+                                onPress={() => navigation?.navigate("Profile")}
+                            >
+                                <Ionicons name="menu" size={22} color={appColors.darkText} />
+                            </TouchableOpacity>
+
+                            <View style={styles.userProfilePill}>
+                                <Image
+                                    source={{
+                                        uri:
+                                            user?.profilePicUrl ||
+                                            "https://images.unsplash.com/photo-1633332755192-727a05c4013d?w=200&auto=format&fit=crop&q=80",
+                                    }}
+                                    style={styles.avatar}
+                                />
+                                <Text style={styles.usernameText} numberOfLines={1}>
+                                    {user?.name || "Rider"}
+                                </Text>
+                            </View>
+                        </View>
+                    </View>
+
+                    {/* DESTINATION SEARCH & POPUP SUGGESTIONS */}
+                    <View style={styles.bottomSection}>
+                        {/* Auto-suggest dropdown rendered directly above input */}
+                        {suggestions.length > 0 && (
+                            <View style={styles.suggestionBox}>
+                                <FlatList
+                                    data={suggestions}
+                                    keyExtractor={(item) => item.id}
+                                    keyboardShouldPersistTaps="handled"
+                                    renderItem={({ item }) => (
+                                        <TouchableOpacity
+                                            style={styles.suggestionItem}
+                                            onPress={() => handleSelectPlace(item)}
+                                        >
+                                            <Ionicons name="location-outline" size={18} color={appColors.subText} />
+                                            <View style={styles.suggestionTextWrapper}>
+                                                <Text style={styles.placeTitle}>{item.title}</Text>
+                                                <Text style={styles.placeSubtitle}>{item.subtitle}</Text>
+                                            </View>
+                                        </TouchableOpacity>
+                                    )}
+                                />
+                            </View>
+                        )}
+
+                        <View style={styles.searchBarContainer}>
+                            <Ionicons name="search" size={20} color={appColors.subText} style={styles.searchIcon} />
+                            <TextInput
+                                style={styles.textInput}
+                                placeholder="Where to? (Destination)"
+                                placeholderTextColor={appColors.subText}
+                                value={destination}
+                                onChangeText={handleDestinationChange}
+                                returnKeyType="search"
+                                onSubmitEditing={() => {
+                                    if (destination.trim()) {
+                                        handleSelectPlace({
+                                            title: destination,
+                                            lat: (location?.latitude || 17.6599) + 0.01,
+                                            lon: (location?.longitude || 75.9064) + 0.01,
+                                        });
+                                    }
+                                }}
+                            />
+                        </View>
                     </View>
                 </View>
-
-                {/* FLOATING RECENTER BUTTON */}
-                <View style={styles.floatingControls}>
-                    <TouchableOpacity style={styles.floatingBtn} activeOpacity={0.8} onPress={handleRecenter}>
-                        <Ionicons name="locate" size={22} color="#0F172A" />
-                    </TouchableOpacity>
-                </View>
-            </View>
-
-            {/* BOTTOM RAPIDO SEARCH SHEET */}
-            <View style={styles.bottomSheet}>
-                <Text style={styles.sheetHeading}>Where to?</Text>
-
-                <TouchableOpacity
-                    style={styles.searchBar}
-                    activeOpacity={0.85}
-                    onPress={() => navigation.navigate("Route", { destination: searchLocation })}
-                >
-                    <Ionicons name="search" size={20} color="#94A3B8" style={{ marginRight: 10 }} />
-                    <TextInput
-                        style={styles.searchInput}
-                        placeholder="Search destination"
-                        placeholderTextColor="#94A3B8"
-                        value={searchLocation}
-                        onChangeText={setSearchLocation}
-                        onSubmitEditing={() => navigation.navigate("Route", { destination: searchLocation })}
-                    />
-                </TouchableOpacity>
-
-                {/* SHORTCUTS ROW */}
-                <View style={styles.shortcutsRow}>
-                    <TouchableOpacity style={styles.shortcutItem} onPress={() => handleQuickPlaceSelect("Recent")}>
-                        <View style={styles.shortcutIconBox}>
-                            <Ionicons name="time-outline" size={22} color="#64748B" />
-                        </View>
-                        <Text style={styles.shortcutLabel}>Recent</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.shortcutItem} onPress={() => handleQuickPlaceSelect("Home")}>
-                        <View style={styles.shortcutIconBox}>
-                            <Ionicons name="home-outline" size={22} color="#64748B" />
-                        </View>
-                        <Text style={styles.shortcutLabel}>Home</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.shortcutItem} onPress={() => handleQuickPlaceSelect("Office")}>
-                        <View style={styles.shortcutIconBox}>
-                            <Ionicons name="business-outline" size={22} color="#64748B" />
-                        </View>
-                        <Text style={styles.shortcutLabel}>Office</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.shortcutItem} onPress={() => handleQuickPlaceSelect("Saved")}>
-                        <View style={styles.shortcutIconBox}>
-                            <Ionicons name="heart-outline" size={22} color="#64748B" />
-                        </View>
-                        <Text style={styles.shortcutLabel}>Saved</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.shortcutItem} onPress={() => handleQuickPlaceSelect("Hostel")}>
-                        <View style={styles.shortcutIconBox}>
-                            <Ionicons name="grid-outline" size={22} color="#64748B" />
-                        </View>
-                        <Text style={styles.shortcutLabel}>Hostel</Text>
-                    </TouchableOpacity>
-                </View>
-            </View>
-        </View>
+            </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: "#FFFFFF",
+        backgroundColor: appColors.background,
     },
-    mapContainer: {
+    innerContainer: {
+        flex: 1,
+    },
+    mapSection: {
         flex: 1,
         width: "100%",
         position: "relative",
+        backgroundColor: "#E2E8F0",
     },
-    mapLoader: {
+    absoluteMap: {
+        width: "100%",
+        height: "100%",
+    },
+    centerBox: {
         flex: 1,
         justifyContent: "center",
         alignItems: "center",
-        backgroundColor: "#F8FAFC",
     },
-    loaderText: {
-        marginTop: 10,
+    errorText: {
         fontSize: 13,
-        color: "#64748B",
-        fontWeight: "600",
-    },
-    bikeMarker: {
-        backgroundColor: "#FFFFFF",
-        padding: 6,
-        borderRadius: 20,
-        elevation: 4,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 4,
-        borderWidth: 1,
-        borderColor: "#E2E8F0",
+        color: appColors.subText,
+        marginTop: 6,
     },
     topBar: {
         position: "absolute",
-        top: Platform.OS === "ios" ? 54 : 44,
+        top: Platform.OS === "ios" ? 52 : 42,
         left: 20,
+        right: 20,
         flexDirection: "row",
         alignItems: "center",
         gap: 12,
     },
     menuButton: {
-        width: 48,
-        height: 48,
-        backgroundColor: "#FFFFFF",
+        width: 44,
+        height: 44,
         borderRadius: 14,
-        justifyContent: "center",
-        alignItems: "center",
-        elevation: 5,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.12,
-        shadowRadius: 6,
-    },
-    userBadge: {
-        backgroundColor: "rgba(255, 255, 255, 0.95)",
-        paddingHorizontal: 14,
-        paddingVertical: 10,
-        borderRadius: 14,
-        elevation: 3,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 4,
-    },
-    userGreeting: {
-        fontSize: 14,
-        fontWeight: "700",
-        color: "#0F172A",
-    },
-    floatingControls: {
-        position: "absolute",
-        right: 18,
-        bottom: 24,
-    },
-    floatingBtn: {
-        width: 46,
-        height: 46,
         backgroundColor: "#FFFFFF",
-        borderRadius: 12,
         justifyContent: "center",
         alignItems: "center",
         elevation: 4,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.12,
-        shadowRadius: 5,
+        shadowRadius: 4,
     },
-    bottomSheet: {
-        backgroundColor: "#FFFFFF",
-        borderTopLeftRadius: 28,
-        borderTopRightRadius: 28,
-        paddingHorizontal: 20,
-        paddingTop: 22,
-        paddingBottom: Platform.OS === "ios" ? 95 : 85,
-        elevation: 12,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-    },
-    sheetHeading: {
-        fontSize: 20,
-        fontWeight: "800",
-        color: "#1E293B",
-        marginBottom: 16,
-    },
-    searchBar: {
+    userProfilePill: {
         flexDirection: "row",
         alignItems: "center",
-        backgroundColor: "#F8FAFC",
+        backgroundColor: "rgba(255, 255, 255, 0.95)",
+        paddingVertical: 5,
+        paddingHorizontal: 10,
         borderRadius: 14,
-        paddingHorizontal: 14,
-        height: 52,
-        borderWidth: 1,
-        borderColor: "#F1F5F9",
-        marginBottom: 20,
+        elevation: 4,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        maxWidth: "75%",
     },
-    searchInput: {
+    avatar: {
+        width: 32,
+        height: 32,
+        borderRadius: 10,
+        marginRight: 8,
+    },
+    usernameText: {
+        fontSize: 14,
+        fontWeight: "700",
+        color: appColors.darkText,
+    },
+    bottomSection: {
+        paddingHorizontal: 16,
+        paddingTop: 14,
+        paddingBottom: Platform.OS === "ios" ? 28 : 16,
+        backgroundColor: appColors.cardBg,
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        elevation: 10,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 6,
+    },
+    searchBarContainer: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: appColors.inputBg,
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        height: 50,
+        borderWidth: 1,
+        borderColor: appColors.border,
+    },
+    searchIcon: {
+        marginRight: 8,
+    },
+    textInput: {
         flex: 1,
         fontSize: 15,
         fontWeight: "600",
-        color: "#0F172A",
+        color: appColors.darkText,
     },
-    shortcutsRow: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-    },
-    shortcutItem: {
-        alignItems: "center",
-        width: (width - 40) / 5.2,
-    },
-    shortcutIconBox: {
-        width: 48,
-        height: 48,
-        backgroundColor: "#F8FAFC",
+    suggestionBox: {
+        position: "absolute",
+        bottom: 70,
+        left: 16,
+        right: 16,
+        backgroundColor: "#FFFFFF",
         borderRadius: 14,
-        justifyContent: "center",
-        alignItems: "center",
-        marginBottom: 6,
         borderWidth: 1,
-        borderColor: "#F1F5F9",
+        borderColor: appColors.border,
+        maxHeight: 180,
+        elevation: 8,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.12,
+        shadowRadius: 6,
+        zIndex: 999,
     },
-    shortcutLabel: {
+    suggestionItem: {
+        flexDirection: "row",
+        alignItems: "center",
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: "#F1F5F9",
+    },
+    suggestionTextWrapper: {
+        marginLeft: 10,
+    },
+    placeTitle: {
+        fontSize: 14,
+        fontWeight: "700",
+        color: appColors.darkText,
+    },
+    placeSubtitle: {
         fontSize: 12,
-        fontWeight: "600",
-        color: "#64748B",
+        color: appColors.subText,
     },
 });
