@@ -1,5 +1,5 @@
 // Local LAN Host IPv4 Address
-const HOST_IP = "10.190.147.233";
+const HOST_IP = "10.98.118.135";
 
 // Authentication & Identity Service (Port 8081 / 8080)
 export const AUTH_URL = `http://${HOST_IP}:8080/api`;

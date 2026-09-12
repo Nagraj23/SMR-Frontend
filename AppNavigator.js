@@ -18,6 +18,7 @@ import Reset from "./Screens/Reset";
 // App Screens
 import MainTabs from "./Screens/MainTabs";
 import RouteScreen from "./Screens/Route";
+import Publish from "./Screens/PublishRideScreen";
 import ManifestDetails from "./Screens/ManifestDetails";
 
 const Stack = createNativeStackNavigator();
@@ -86,6 +87,7 @@ export default function AppNavigator() {
                 <Stack.Navigator screenOptions={{ headerShown: false }}>
                     {userToken ? (
                         <Stack.Group>
+                            <Stack.Screen name="Publish" component={Publish} />
                             <Stack.Screen name="MainTabs" component={MainTabs} />
                             <Stack.Screen name="RouteScreen" component={RouteScreen} />
                             <Stack.Screen name="ManifestDetails" component={ManifestDetails} />
